@@ -1,43 +1,31 @@
-const welcomeMessage = `Вітаємо у Mokko Coffee! 🧡
-Ми створили цей бот, щоб ви могли легко керувати своїм профілем та першими дізнаватися про наші акції.
+import { Composer } from "telegraf";
+import { welcomeMessage, validationSchema } from "./validation.js";
 
-Що ви отримаєте:
-✅ Доступ до спеціальних пропозицій.
-✅ Зручний мобільний застосунок для замовлень.
-✅ Персональні знижки для наших постійних гостей.
-
-Пройдіть реєстрацію нижче для того, щоб почати користуватись застосунком!`;
-
-const validationSchema = Yup.object().shape({
-  fullName: Yup.string()
-    .min(2, "Ім’я та прізвище занадто короткі")
-    .max(50, "Ім’я та прізвище занадто довгі")
-    .matches(/^[a-zA-Zа-яА-ЯёЁіІїЇєЄґҐ\s]+$/, "Використовуйте лише літери"),
-
-  phone: Yup.string()
-    .matches(
-      /^\+?[0-9]{10,12}$/,
-      "Введіть коректний номер (наприклад, +380...)",
-    )
-    .required("Номер телефону обов’язковий"),
-});
-
+// Локальное хранилище состояний сессий
 const userData = {};
 
-bot.start((ctx) => {
-  userData[ctx.chat.id] = { stage: "name" };
+const userComposer = new Composer();
+
+// Обработка команды /start
+userComposer.start((ctx) => {
+  const userId = ctx.chat.id;
+  userData[userId] = { stage: "name" };
+
   ctx.reply(welcomeMessage);
   ctx.reply("Будь-ласка напишіть ваше ім'я та прізвище");
 });
 
-bot.on("text", async (ctx) => {
+// Обработка текстовых сообщений во время регистрации
+userComposer.on("text", async (ctx, next) => {
   const userId = ctx.chat.id;
+  const text = ctx.message.text;
 
+  // Если пользователя нет в базе регистрации, передаем управление дальше
+  // (например, если он уже зарегистрирован и это просто текст)
   if (!userData[userId]) {
     return ctx.reply("Будь ласка, натисніть /start для реєстрації.");
   }
 
-  const text = ctx.message.text;
   const userState = userData[userId];
 
   switch (userState.stage) {
@@ -64,9 +52,9 @@ bot.on("text", async (ctx) => {
           "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
         );
 
-        // poster pos api
+        // TODO: Отправка данных в poster pos api (userData[userId])
 
-        delete userData[userId];
+        delete userData[userId]; // Очищаем сессию после успешной регистрации
       } catch (err) {
         ctx.reply(err.message);
       }
@@ -79,3 +67,5 @@ bot.on("text", async (ctx) => {
       break;
   }
 });
+
+export { userComposer as userScenary };

@@ -1,34 +1,43 @@
-import { Telegraf } from "telegraf";
+import "dotenv/config";
+import { Telegraf, Composer } from "telegraf";
 import * as Yup from "yup";
-const { setManagerRole, getManagerRole } = require("./db");
-
-const bot = new Telegraf("8852550649:AAGhuyCwn5ABtIO2X4jMVC-bxORDj3mxgx0");
-const role = "";
+import { setManagerRole, getManagerRole } from "../db.js";
+import { userScenary } from "./userScenary.js";
+import { workerScenary } from "./workerScenary.js";
+const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 bot.use(async (ctx, next) => {
   const userID = ctx.from?.id;
-  if (getManagerRole(userID) === "worker") {
-    role = "worker";
-  } else if (getManagerRole(userID) === "boss") {
-    role = "boss";
+  if (!userID) return;
+
+  // 1. Получаем объект из базы данных
+  const managerRow = getManagerRole(userID);
+
+  // Добавим логи в консоль, чтобы ты своими глазами увидел, что происходит
+  console.log(`[Бот] Запрос роли для ID ${userID}:`, managerRow);
+
+  // 2. Проверяем: если запись найдена, берем свойство .role
+  if (managerRow && managerRow.role === "worker") {
+    ctx.state.role = "worker";
+  } else if (managerRow && managerRow.role === "boss") {
+    ctx.state.role = "boss";
   } else {
-    role = "user";
+    ctx.state.role = "user";
   }
+
+  console.log(`[Бот] Установлена роль: ${ctx.state.role}`);
+
+  await next();
 });
 
-switch (role) {
-  case "user":
-    require("./userScenary");
-    break;
-  case "worker":
-    require("./workerScenary");
-    break;
-  case "boss":
-    require("./workerScenery");
-    break;
-  default:
-    break;
-}
+bot.use(Composer.optional((ctx) => ctx.state.role === "user", userScenary));
+
+bot.use(
+  Composer.optional(
+    (ctx) => ctx.state.role === "worker" || ctx.state.role === "boss",
+    workerScenary,
+  ),
+);
 
 bot.launch();
 
