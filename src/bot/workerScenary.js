@@ -1,20 +1,16 @@
 import { Composer } from "telegraf";
-import * as JimpPkg from "jimp"; // Импортируем весь пакет, чтобы обойти разницу версий
+import * as JimpPkg from "jimp";
 import jsQR from "jsqr";
 
 const qrComposer = new Composer();
 
-// Безопасный метод чтения для любой версии Jimp
 async function readImageWithJimp(buffer) {
-  // Если это новая версия 1.x, у неё есть JimpPkg.Jimp
   if (JimpPkg.Jimp && typeof JimpPkg.Jimp.read === "function") {
     return await JimpPkg.Jimp.read(buffer);
   }
-  // Если это старая версия 0.x, то сам JimpPkg является функцией/классом с методом read
   if (typeof JimpPkg.read === "function") {
     return await JimpPkg.read(buffer);
   }
-  // Если используется совсем новая модульная структура
   if (typeof JimpPkg.default?.read === "function") {
     return await JimpPkg.default.read(buffer);
   }
@@ -39,7 +35,6 @@ async function scanQRCode(imageBuffer) {
   }
 }
 
-// Хендлер на фото
 qrComposer.on("photo", async (ctx) => {
   console.log(
     `\n=== [ВХІДНИЙ АПДЕЙТ] Отримано фото від користувача з ID: ${ctx.from.id} ===`,
