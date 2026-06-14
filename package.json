@@ -1,6 +1,5 @@
 {
   "name": "mokko-coffee_back",
-  "type": "module",
   "version": "1.0.0",
   "type": "module",
   "main": "src/server.js",

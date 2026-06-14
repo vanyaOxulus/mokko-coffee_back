@@ -1,12 +1,10 @@
 import { Composer } from "telegraf";
 import { welcomeMessage, validationSchema } from "./validation.js";
 
-// Локальное хранилище состояний сессий
 const userData = {};
 
 const userComposer = new Composer();
 
-// Обработка команды /start
 userComposer.start((ctx) => {
   const userId = ctx.chat.id;
   userData[userId] = { stage: "name" };
@@ -15,13 +13,10 @@ userComposer.start((ctx) => {
   ctx.reply("Будь-ласка напишіть ваше ім'я та прізвище");
 });
 
-// Обработка текстовых сообщений во время регистрации
 userComposer.on("text", async (ctx, next) => {
   const userId = ctx.chat.id;
   const text = ctx.message.text;
 
-  // Если пользователя нет в базе регистрации, передаем управление дальше
-  // (например, если он уже зарегистрирован и это просто текст)
   if (!userData[userId]) {
     return ctx.reply("Будь ласка, натисніть /start для реєстрації.");
   }
@@ -52,9 +47,8 @@ userComposer.on("text", async (ctx, next) => {
           "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
         );
 
-        // TODO: Отправка данных в poster pos api (userData[userId])
 
-        delete userData[userId]; // Очищаем сессию после успешной регистрации
+        delete userData[userId];
       } catch (err) {
         ctx.reply(err.message);
       }

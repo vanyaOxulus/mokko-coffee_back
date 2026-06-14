@@ -10,13 +10,10 @@ bot.use(async (ctx, next) => {
   const userID = ctx.from?.id;
   if (!userID) return;
 
-  // 1. Получаем объект из базы данных
   const managerRow = getManagerRole(userID);
 
-  // Добавим логи в консоль, чтобы ты своими глазами увидел, что происходит
   console.log(`[Бот] Запрос роли для ID ${userID}:`, managerRow);
 
-  // 2. Проверяем: если запись найдена, берем свойство .role
   if (managerRow && managerRow.role === "worker") {
     ctx.state.role = "worker";
   } else if (managerRow && managerRow.role === "boss") {
