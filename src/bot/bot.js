@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { Telegraf, Composer } from "telegraf";
 import * as Yup from "yup";
-import { setManagerRole, getManagerRole } from "../db.js";
+import { setManagerRole, getManagerRole } from "../managers_db.js";
 import { userScenary } from "./userScenary.js";
 import { workerScenary } from "./workerScenary.js";
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);

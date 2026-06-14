@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { getUserById } from "./bot/user_db.js";
 
 dotenv.config();
 
@@ -12,7 +13,8 @@ console.log(
 );
 
 const app = express();
-require("./bot/bot");
+import "./bot/user_db.js"
+import "./bot/bot.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -32,7 +34,33 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.post("/api/poster/clients", async (req, res) => {
+app.get("/api/users/:userID", (req, res) => {
+  try {
+    const { userID } = req.params;
+
+    const user = getUserById(Number(userID));
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    res.json({
+      message: "User info received",
+      user,
+    });
+  } catch (error) {
+    console.error("Get user error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+const createPosterUser = async (req, res) => {
   try {
     const { name, phone, telegramId } = req.body;
 
@@ -88,7 +116,7 @@ app.post("/api/poster/clients", async (req, res) => {
       error: error.message,
     });
   }
-});
+};
 
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
