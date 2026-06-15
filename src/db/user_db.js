@@ -40,7 +40,7 @@ export function updateUserBonuses(userID, bonuses) {
   return stmt.run(bonuses, userID);
 }
 
-export function incrementUserBonuses(userID, amount) {
+export function incrementUserBonuses(userID) {
   const stmt = db.prepare(
     `
     UPDATE users

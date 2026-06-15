@@ -1,8 +1,9 @@
-import { Composer } from "telegraf";
+import { Composer, Markup } from "telegraf";
 import * as JimpPkg from "jimp";
 import jsQR from "jsqr";
+import { getUserById, incrementUserBonuses } from "../db/user_db.js";
 
-const qrComposer = new Composer();
+const managerComposer = new Composer();
 
 async function readImageWithJimp(buffer) {
   if (JimpPkg.Jimp && typeof JimpPkg.Jimp.read === "function") {
@@ -35,7 +36,7 @@ async function scanQRCode(imageBuffer) {
   }
 }
 
-qrComposer.on("photo", async (ctx) => {
+managerComposer.on("photo", async (ctx) => {
   console.log(
     `\n=== [ВХІДНИЙ АПДЕЙТ] Отримано фото від користувача з ID: ${ctx.from.id} ===`,
   );
@@ -59,12 +60,36 @@ qrComposer.on("photo", async (ctx) => {
     );
 
     const qrContent = await scanQRCode(imageBuffer);
-    console.log(`[Бот] Результат сканування: ${qrContent}`);
+    const clientId = qrContent.split(":")[1];
+    console.log(`[Бот] Результат сканування: ${clientId}`);
+    const user = getUserById(clientId);
+    console.log("User:", user);
 
-    if (qrContent) {
+    if (clientId) {
       await ctx.reply(
-        `✅ <b>QR-код розпізнано!</b>\n\nВміст:\n<code>${qrContent}</code>`,
-        { parse_mode: "HTML" },
+        `👤 <b>Клієнта знайдено!</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏷️ <b>Ім'я:</b> ${user.name}\n` +
+          `📞 <b>Телефон:</b> <code>${user.phone}</code>\n` +
+          `🪙 <b>Бонуси:</b> ${user.bonuses}/7\n` +
+          `🆔 <b>Telegram ID:</b> <code>${user.userID}</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Оберіть дію для цього профілю:`,
+        {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard([
+            [
+              Markup.button.callback(
+                "➕ Додати бонус",
+                `bonus_add:${user.userID}`,
+              ),
+              Markup.button.callback(
+                "❌ Скасувати",
+                `bonus_cancel:${user.userID}`,
+              ),
+            ],
+          ]),
+        },
       );
     } else {
       await ctx.reply(
@@ -77,4 +102,32 @@ qrComposer.on("photo", async (ctx) => {
   }
 });
 
-export { qrComposer as workerScenary };
+managerComposer.action(/^bonus_add:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery("Обробка...");
+
+  const clientId = ctx.match[1];
+
+  try {
+    await incrementUserBonuses(clientId);
+
+    await ctx.editMessageText(
+      `✅ Бонус успішно додано для клієнта (ID: ${clientId})!`,
+    );
+  } catch (error) {
+    console.error("Помилка нарахування бонусу:", error);
+    await ctx.reply("❌ Провисла помилка при додаванні бонусу в базу.");
+  }
+});
+
+managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+
+  const clientId = ctx.match[1];
+
+  // Просто редактируем сообщение, убирая кнопки и закрывая сессию
+  await ctx.editMessageText(
+    `🚫 Операцію для клієнта (ID: ${clientId}) скасовано менеджером.`,
+  );
+});
+
+export { managerComposer as workerScenary };
