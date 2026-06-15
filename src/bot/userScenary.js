@@ -1,6 +1,7 @@
 import { Composer } from "telegraf";
 import { welcomeMessage, validationSchema } from "./validation.js";
-import { createUser } from "./user_db.js";
+import { createUser } from "../db/user_db.js";
+import createPosterUser from "../posterMethods/createUser.js";
 
 const userData = {};
 
@@ -52,7 +53,9 @@ userComposer.on("text", async (ctx, next) => {
         }
 
         ctx.reply("Дякую, номер прийнято!");
+
         createUser(userId, userData[userId].name, phone, 0);
+
         ctx.reply(
           "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
         );

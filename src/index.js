@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { getUserById } from "./bot/user_db.js";
+import { getUserById } from "./db/user_db.js";
 
 dotenv.config();
 
@@ -13,10 +13,12 @@ console.log(
 );
 
 const app = express();
-import "./bot/user_db.js"
+import "./db/user_db.js";
 import "./bot/bot.js";
+import getUser from "./posterMethods/getUser.js";
 
 const PORT = process.env.PORT || 5000;
+getUser("123456789");
 
 app.use(cors());
 app.use(express.json());
@@ -59,64 +61,6 @@ app.get("/api/users/:userID", (req, res) => {
     });
   }
 });
-
-const createPosterUser = async (req, res) => {
-  try {
-    const { name, phone, telegramId } = req.body;
-
-    if (!name || !phone) {
-      return res.status(400).json({
-        message: "name and phone are required",
-      });
-    }
-
-    const token = encodeURIComponent(process.env.POSTER_TOKEN);
-    const url = `${process.env.POSTER_API_URL}/clients.createClient?token=${token}`;
-
-    const posterResponse = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        client_name: name,
-        client_groups_id_client: "3",
-        phone: phone,
-        comment: telegramId ? `telegram_id:${telegramId}` : "",
-      }),
-    });
-
-    const text = await posterResponse.text();
-    console.log("Poster raw response:", text);
-
-    let data;
-
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-
-    if (!posterResponse.ok || data?.error) {
-      return res.status(400).json({
-        message: "Poster client create error",
-        poster: data,
-      });
-    }
-
-    res.status(201).json({
-      message: "Client created in Poster",
-      poster: data,
-    });
-  } catch (error) {
-    console.error("Poster client create error:", error);
-
-    res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
-  }
-};
 
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
