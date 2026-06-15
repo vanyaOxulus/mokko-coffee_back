@@ -1,3 +1,5 @@
+import "./db/user_db.js";
+import "./bot/bot.js";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -13,12 +15,8 @@ console.log(
 );
 
 const app = express();
-import "./db/user_db.js";
-import "./bot/bot.js";
-import getUser from "./posterMethods/getUser.js";
 
 const PORT = process.env.PORT || 5000;
-getUser("123456789");
 
 app.use(cors());
 app.use(express.json());

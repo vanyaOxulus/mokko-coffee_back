@@ -1,4 +1,6 @@
-const createUser = async ({ name, phone, telegramId }) => {
+import dotenv from "dotenv";
+
+const createUser = async (name, phone, telegramId) => {
   try {
     if (!name || !phone) {
       return res.status(400).json({
@@ -34,23 +36,10 @@ const createUser = async ({ name, phone, telegramId }) => {
     }
 
     if (!posterResponse.ok || data?.error) {
-      return res.status(400).json({
-        message: "Poster client create error",
-        poster: data,
-      });
+      console.log("Poster client create error");
     }
-
-    res.status(201).json({
-      message: "Client created in Poster",
-      poster: data,
-    });
   } catch (error) {
     console.error("Poster client create error:", error);
-
-    res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
   }
 };
 

@@ -33,3 +33,7 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Databases
+users.db
+managers.db
