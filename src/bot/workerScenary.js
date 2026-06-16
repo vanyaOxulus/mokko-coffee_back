@@ -193,6 +193,24 @@ managerComposer.command("setWorker", async (ctx) => {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
 });
+managerComposer.command("deleteWorker", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId).role;
+  console.log("Role:", role);
+
+  if (role === "boss") {
+    managerState[userId] = { stage: "wait_delete_manager_id" };
+
+    await ctx.reply(
+      "💼 *Режим видалення працівника\\.*\n\nБудь ласка, надішліть Telegram ID менеджера, якого ви хочете видалити:",
+      {
+        parse_mode: "MarkdownV2",
+      },
+    );
+  } else {
+    await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+});
 
 // Команда /deleteWorker для Босса
 managerComposer.command("deleteWorker", async (ctx) => {
@@ -275,6 +293,37 @@ managerComposer.on("text", async (ctx, next) => {
       console.error("Помилка при видаленні менеджера:", error);
       await ctx.reply(
         "❌ Сталася помилка при видаленні менеджера з бази даних.",
+      );
+      delete managerState[userId];
+    }
+  } else if (currentState.stage === "wait_delete_manager_id") {
+    const managerId = Number(text);
+
+    if (isNaN(managerId) || text.length < 5) {
+      return ctx.reply(
+        "❌ Некоректний Telegram ID. Він має складатися лише з цифр. Спробуйте ще раз або введіть інший:",
+      );
+    } else if (managerId === ctx.from.id) {
+      return ctx.reply(
+        "❌ Ви не можете видалити себе. Спробуйте ще раз або введіть інший:",
+      );
+    }
+
+    try {
+      await deleteManager(managerId);
+
+      await ctx.reply(
+        `✅ Працівника з ID \`${managerId}\` успішно додано до бази даних як менеджера\\.`,
+        {
+          parse_mode: "MarkdownV2",
+        },
+      );
+
+      delete managerState[userId];
+    } catch (error) {
+      console.error("Помилка при додаванні менеджера:", error);
+      await ctx.reply(
+        "❌ Провисла помилка при збереженні менеджера в базу даних.",
       );
       delete managerState[userId];
     }
