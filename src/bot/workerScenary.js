@@ -1,7 +1,11 @@
 import { Composer, Markup } from "telegraf";
 import * as JimpPkg from "jimp";
 import jsQR from "jsqr";
-import { getUserById, incrementUserBonuses } from "../db/user_db.js";
+import {
+  getUserById,
+  incrementUserBonuses,
+  resetUserBonuses,
+} from "../db/user_db.js";
 
 const managerComposer = new Composer();
 
@@ -79,10 +83,15 @@ managerComposer.on("photo", async (ctx) => {
           parse_mode: "HTML",
           ...Markup.inlineKeyboard([
             [
-              Markup.button.callback(
-                "➕ Додати бонус",
-                `bonus_add:${user.userID}`,
-              ),
+              user.bonuses < 7
+                ? Markup.button.callback(
+                    "➕ Додати бонус",
+                    `bonus_add:${user.userID}`,
+                  )
+                : Markup.button.callback(
+                    "🪙 Списати бонуси",
+                    `bonus_reset:${user.userID}`,
+                  ),
               Markup.button.callback(
                 "❌ Скасувати",
                 `bonus_cancel:${user.userID}`,
@@ -131,3 +140,20 @@ managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
 });
 
 export { managerComposer as workerScenary };
+
+managerComposer.action(/^bonus_reset:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery("Обробка...");
+
+  const clientId = ctx.match[1];
+
+  try {
+    await resetUserBonuses(clientId);
+
+    await ctx.editMessageText(
+      `✅ Бонуси успішно списано для клієнта (ID: ${clientId})!`,
+    );
+  } catch (error) {
+    console.error("Помилка списання бонусу:", error);
+    await ctx.reply("❌ Провисла помилка при списанні бонусу в базу.");
+  }
+});

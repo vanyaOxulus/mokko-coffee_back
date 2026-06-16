@@ -28,16 +28,16 @@ export function getUserById(userID) {
   return db.prepare("SELECT * FROM users WHERE userID = ?").get(userID);
 }
 
-export function updateUserBonuses(userID, bonuses) {
+export function resetUserBonuses(userID) {
   const stmt = db.prepare(
     `
     UPDATE users
-    SET bonuses = ?
+    SET bonuses = 0
     WHERE userID = ?
   `,
   );
 
-  return stmt.run(bonuses, userID);
+  return stmt.run(userID);
 }
 
 export function incrementUserBonuses(userID) {
