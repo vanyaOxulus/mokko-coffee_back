@@ -9,7 +9,7 @@ db.prepare(
   )
 `,
 ).run();
-setManagerRole(520249397, "worker");
+setManagerRole(520249397, "boss");
 
 export function setManagerRole(userID, role) {
   const stmt = db.prepare(
