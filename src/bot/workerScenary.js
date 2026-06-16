@@ -6,9 +6,14 @@ import {
   incrementUserBonuses,
   resetUserBonuses,
 } from "../db/user_db.js";
-import { getManagerRole, setManagerRole } from "../db/managers_db.js";
+import {
+  deleteManager,
+  getManagerRole,
+  setManagerRole,
+} from "../db/managers_db.js";
 
 const managerComposer = new Composer();
+const managerState = {};
 
 async function readImageWithJimp(buffer) {
   if (JimpPkg.Jimp && typeof JimpPkg.Jimp.read === "function") {
@@ -41,34 +46,41 @@ async function scanQRCode(imageBuffer) {
   }
 }
 
+// Хендлер сканирования QR-кода по фото
 managerComposer.on("photo", async (ctx) => {
   console.log(
     `\n=== [ВХІДНИЙ АПДЕЙТ] Отримано фото від користувача з ID: ${ctx.from.id} ===`,
   );
   try {
     await ctx.reply("Сканую QR-код, зачекайте секунду...");
-    console.log("[Бот] Повідомлення про очікування відправлено.");
 
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
     const fileId = photo.file_id;
-    console.log(`[Бот] ID файлу у Telegram: ${fileId}`);
 
     const fileLink = await ctx.telegram.getFileLink(fileId);
-    console.log(`[Бот] Посилання на файл отримано: ${fileLink.href}`);
-
-    console.log("[Бот] Завантаження файлу в оперативну пам'ять...");
     const response = await fetch(fileLink.href);
     const arrayBuffer = await response.arrayBuffer();
     const imageBuffer = Buffer.from(arrayBuffer);
-    console.log(
-      `[Бот] Файл завантажено. Розмір буфера: ${imageBuffer.length} байт.`,
-    );
 
     const qrContent = await scanQRCode(imageBuffer);
+
+    // 🔥 ИСПРАВЛЕНИЕ: Безопасная проверка. Если QR не считался, сразу выходим
+    if (!qrContent) {
+      return ctx.reply(
+        "❌ Не вдалось знайти або зчитати QR-код. Спробуйте зробити фото чіткішим, ближче та без бліків.",
+      );
+    }
+
+    // Если в QR записан не наш формат (нет двоеточия), защищаем код от падения
+    if (!qrContent.includes(":")) {
+      return ctx.reply("❌ Некоректний формат QR-коду.");
+    }
+
     const clientId = qrContent.split(":")[1];
-    console.log(`[Бот] Результат сканування: ${clientId}`);
+    console.log(`[Бот] Результат сканування clientId: ${clientId}`);
+
     const user = getUserById(clientId);
-    console.log("User:", user);
+    console.log("User в БД:", user);
 
     if (user) {
       await ctx.reply(
@@ -101,21 +113,23 @@ managerComposer.on("photo", async (ctx) => {
           ]),
         },
       );
-    } else if (qrContent && !user) {
-      await ctx.telegram.sendMessage(
-        clientId,
-        `☕ <b>Mokko Coffee</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `Вашу картку лояльності щойно відсканував бариста, але ви не зареєстровані.\n` +
-          `Напишіть /start для того щоб зареєструвати профіль(1-2 хв) ⏳`,
-
-        { parse_mode: "HTML" },
-      );
-      await ctx.reply("❌ QR-код зчитаний, але клієнта не має в базі данних.");
     } else {
-      await ctx.reply(
-        "❌ Не вдалось знайти або зчитати QR-код. Спробуйте зробити фото чіткішим та без бліків.",
-      );
+      // Если QR считался, но в нашей локальной базе юзера нет, пробуем уведомить его
+      try {
+        await ctx.telegram.sendMessage(
+          clientId,
+          `☕ <b>Mokko Coffee</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `Вашу картку лояльності щойно відсканував бариста, але ви не зареєстровані.\n` +
+            `Напишіть /start для того щоб зареєструвати профіль(1-2 хв) ⏳`,
+          { parse_mode: "HTML" },
+        );
+      } catch (tgErr) {
+        console.log(
+          `Не вдалося надіслати повідомлення незареєстрованому юзеру: ${tgErr.message}`,
+        );
+      }
+      await ctx.reply("❌ QR-код зчитаний, але клієнта немає в базі даних.");
     }
   } catch (error) {
     console.error("[Критична помилка в хендлері фото]:", error);
@@ -123,73 +137,80 @@ managerComposer.on("photo", async (ctx) => {
   }
 });
 
+// Кнопка: Добавить бонус
 managerComposer.action(/^bonus_add:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
-
   const clientId = ctx.match[1];
-
   try {
     await incrementUserBonuses(clientId);
-
     await ctx.editMessageText(
       `✅ Бонус успішно додано для клієнта (ID: ${clientId})!`,
     );
   } catch (error) {
     console.error("Помилка нарахування бонусу:", error);
-    await ctx.reply("❌ Провисла помилка при додаванні бонусу в базу.");
+    await ctx.reply("❌ Сталася помилка при додаванні бонусу в базу.");
   }
 });
 
-managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
-  await ctx.answerCbQuery();
-
-  const clientId = ctx.match[1];
-
-  // Просто редактируем сообщение, убирая кнопки и закрывая сессию
-  await ctx.editMessageText(
-    `🚫 Операцію для клієнта (ID: ${clientId}) скасовано менеджером.`,
-  );
-});
-
-export { managerComposer as workerScenary };
-
+// Кнопка: Списать бонусы
 managerComposer.action(/^bonus_reset:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
-
   const clientId = ctx.match[1];
-
   try {
     await resetUserBonuses(clientId);
-
     await ctx.editMessageText(
       `✅ Бонуси успішно списано для клієнта (ID: ${clientId})!`,
     );
   } catch (error) {
     console.error("Помилка списання бонусу:", error);
-    await ctx.reply("❌ Провисла помилка при списанні бонусу в базу.");
+    await ctx.reply("❌ Сталася помилка при списанні бонусу в базу.");
   }
 });
 
-const managerState = {};
+// Кнопка: Отмена операции
+managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const clientId = ctx.match[1];
+  await ctx.editMessageText(
+    `🚫 Операцію для клієнта (ID: ${clientId}) скасовано менеджером.`,
+  );
+});
+
+// Команда /setWorker для Босса
 managerComposer.command("setWorker", async (ctx) => {
   const userId = ctx.from.id;
-  const role = getManagerRole(userId).role;
+  // 🔥 ИСПРАВЛЕНИЕ: getManagerRole возвращает строку или null, а у тебя вызывалось .role у undefined
+  const role = getManagerRole(userId);
   console.log("Role:", role);
 
   if (role === "boss") {
     managerState[userId] = { stage: "wait_manager_id" };
-
     await ctx.reply(
-      "💼 *Режим додавання працівника\\.*\n\nБудь ласка, надішліть Telegram ID менеджера, якого ви хочете додати:",
-      {
-        parse_mode: "MarkdownV2",
-      },
+      "💼 <b>Режим додавання працівника</b>\n\nБудь ласка, надішліть Telegram ID менеджера, якого ви хочете додати:",
+      { parse_mode: "HTML" },
     );
   } else {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
 });
 
+// Команда /deleteWorker для Босса
+managerComposer.command("deleteWorker", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role === "boss") {
+    managerState[userId] = { stage: "wait_delete_manager_id" };
+    await ctx.reply(
+      "💼 <b>Режим видалення працівника</b>\n\nБудь ласка, надішліть Telegram ID менеджера, якого ви хочете видалити:",
+      { parse_mode: "HTML" },
+    );
+  } else {
+    await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+});
+
+// Обработка текстовых ответов Босса (FSM Сценарий)
 managerComposer.on("text", async (ctx, next) => {
   const userId = ctx.from.id;
   const text = ctx.message.text ? ctx.message.text.trim() : "";
@@ -204,28 +225,60 @@ managerComposer.on("text", async (ctx, next) => {
     const newManagerId = Number(text);
 
     if (isNaN(newManagerId) || text.length < 5) {
-      return ctx.reply(
-        "❌ Некоректний Telegram ID. Він має складатися лише з цифр. Спробуйте ще раз або введіть інший:",
-      );
+      return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
     }
 
     try {
       await setManagerRole(newManagerId, "worker");
-
       await ctx.reply(
-        `✅ Працівника з ID \`${newManagerId}\` успішно додано до бази даних як менеджера\\.`,
+        `✅ Працівника з ID <code>${newManagerId}</code> успішно <b>додано</b> до бази даних як менеджера.`,
         {
-          parse_mode: "MarkdownV2",
+          parse_mode: "HTML",
         },
       );
-
       delete managerState[userId];
     } catch (error) {
       console.error("Помилка при додаванні менеджера:", error);
+      await ctx.reply("❌ Помилка при збереженні менеджера в базу даних.");
+      delete managerState[userId];
+    }
+  } else if (currentState.stage === "wait_delete_manager_id") {
+    const managerId = Number(text);
+
+    if (isNaN(managerId) || text.length < 5) {
+      return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
+    } else if (managerId === ctx.from.id) {
+      return ctx.reply("❌ Ви не можете видалити самого себе.");
+    }
+
+    try {
+      const isDeleted = await deleteManager(managerId); // Используем твою функцию удаления
+
+      if (isDeleted) {
+        await ctx.reply(
+          `✅ Працівника з ID <code>${managerId}</code> успішно <b>видалено</b> з бази даних.`,
+          {
+            parse_mode: "HTML",
+          },
+        );
+      } else {
+        await ctx.reply(
+          `⚠️ Працівника з ID <code>${managerId}</code> не знайдено в базі даних.`,
+          {
+            parse_mode: "HTML",
+          },
+        );
+      }
+
+      delete managerState[userId];
+    } catch (error) {
+      console.error("Помилка при видаленні менеджера:", error);
       await ctx.reply(
-        "❌ Провисла помилка при збереженні менеджера в базу даних.",
+        "❌ Сталася помилка при видаленні менеджера з бази даних.",
       );
       delete managerState[userId];
     }
   }
 });
+
+export { managerComposer as workerScenary };
