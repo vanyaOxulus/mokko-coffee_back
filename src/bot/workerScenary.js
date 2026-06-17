@@ -11,6 +11,7 @@ import {
   getManagerRole,
   setManagerRole,
 } from "../db/managers_db.js";
+import { addCard } from "../db/cards_db.js";
 
 const managerComposer = new Composer();
 const managerState = {};
@@ -35,7 +36,17 @@ async function scanQRCode(imageBuffer) {
     console.log("[QR] Запуск Jimp для читання буфера...");
     const image = await readImageWithJimp(imageBuffer);
 
-    console.log("[QR] Зображення успішно зчитано Jimp. Передаємо в jsQR...");
+    console.log(
+      "[QR] Изображение считано. Применяем фильтры улучшения контраста...",
+    );
+
+    image.greyscale().contrast(0.7).normalize();
+
+    if (image.bitmap.width > 1200) {
+      image.resize(1000, JimpPkg.AUTO || JimpPkg.default?.AUTO || -1);
+    }
+
+    console.log("[QR] Обработка завершена. Передаем в jsQR...");
     const { data, width, height } = image.bitmap;
     const code = jsQR(data, width, height);
 
@@ -46,7 +57,6 @@ async function scanQRCode(imageBuffer) {
   }
 }
 
-// Хендлер сканирования QR-кода по фото
 managerComposer.on("photo", async (ctx) => {
   console.log(
     `\n=== [ВХІДНИЙ АПДЕЙТ] Отримано фото від користувача з ID: ${ctx.from.id} ===`,
@@ -64,14 +74,12 @@ managerComposer.on("photo", async (ctx) => {
 
     const qrContent = await scanQRCode(imageBuffer);
 
-    // 🔥 ИСПРАВЛЕНИЕ: Безопасная проверка. Если QR не считался, сразу выходим
     if (!qrContent) {
       return ctx.reply(
         "❌ Не вдалось знайти або зчитати QR-код. Спробуйте зробити фото чіткішим, ближче та без бліків.",
       );
     }
 
-    // Если в QR записан не наш формат (нет двоеточия), защищаем код от падения
     if (!qrContent.includes(":")) {
       return ctx.reply("❌ Некоректний формат QR-коду.");
     }
@@ -114,7 +122,6 @@ managerComposer.on("photo", async (ctx) => {
         },
       );
     } else {
-      // Если QR считался, но в нашей локальной базе юзера нет, пробуем уведомить его
       try {
         await ctx.telegram.sendMessage(
           clientId,
@@ -137,7 +144,6 @@ managerComposer.on("photo", async (ctx) => {
   }
 });
 
-// Кнопка: Добавить бонус
 managerComposer.action(/^bonus_add:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
   const clientId = ctx.match[1];
@@ -152,7 +158,6 @@ managerComposer.action(/^bonus_add:(\d+)$/, async (ctx) => {
   }
 });
 
-// Кнопка: Списать бонусы
 managerComposer.action(/^bonus_reset:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
   const clientId = ctx.match[1];
@@ -167,7 +172,6 @@ managerComposer.action(/^bonus_reset:(\d+)$/, async (ctx) => {
   }
 });
 
-// Кнопка: Отмена операции
 managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery();
   const clientId = ctx.match[1];
@@ -176,12 +180,11 @@ managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
   );
 });
 
-// Команда /setWorker для Босса
-managerComposer.command("setWorker", async (ctx) => {
+// 👑 СЦЕНАРИИ ДЛЯ БОССА (УПРАВЛЕНИЕ ПЕРСОНАЛОМ)
+
+managerComposer.command("newWorker", async (ctx) => {
   const userId = ctx.from.id;
-  // 🔥 ИСПРАВЛЕНИЕ: getManagerRole возвращает строку или null, а у тебя вызывалось .role у undefined
   const role = getManagerRole(userId);
-  console.log("Role:", role);
 
   if (role === "boss") {
     managerState[userId] = { stage: "wait_manager_id" };
@@ -193,26 +196,7 @@ managerComposer.command("setWorker", async (ctx) => {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
 });
-managerComposer.command("deleteWorker", async (ctx) => {
-  const userId = ctx.from.id;
-  const role = getManagerRole(userId).role;
-  console.log("Role:", role);
 
-  if (role === "boss") {
-    managerState[userId] = { stage: "wait_delete_manager_id" };
-
-    await ctx.reply(
-      "💼 *Режим видалення працівника\\.*\n\nБудь ласка, надішліть Telegram ID менеджера, якого ви хочете видалити:",
-      {
-        parse_mode: "MarkdownV2",
-      },
-    );
-  } else {
-    await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
-  }
-});
-
-// Команда /deleteWorker для Босса
 managerComposer.command("deleteWorker", async (ctx) => {
   const userId = ctx.from.id;
   const role = getManagerRole(userId);
@@ -228,7 +212,21 @@ managerComposer.command("deleteWorker", async (ctx) => {
   }
 });
 
-// Обработка текстовых ответов Босса (FSM Сценарий)
+managerComposer.command("newCard", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role === "boss") {
+    managerState[userId] = { stage: "wait_title" };
+    await ctx.reply(
+      "💼 <b>Режим додавання карточки</b>\n\nБудь ласка, надішліть коротку назву карточки (не більше 3 слів):",
+      { parse_mode: "HTML" },
+    );
+  } else {
+    await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+});
+
 managerComposer.on("text", async (ctx, next) => {
   const userId = ctx.from.id;
   const text = ctx.message.text ? ctx.message.text.trim() : "";
@@ -238,95 +236,147 @@ managerComposer.on("text", async (ctx, next) => {
   }
 
   const currentState = managerState[userId];
+  const targetManagerId = Number(text);
 
-  if (currentState.stage === "wait_manager_id") {
-    const newManagerId = Number(text);
+  try {
+    switch (currentState.stage) {
+      case "wait_manager_id": {
+        if (isNaN(targetManagerId) || text.length < 5) {
+          return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
+        }
 
-    if (isNaN(newManagerId) || text.length < 5) {
-      return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
-    }
-
-    try {
-      await setManagerRole(newManagerId, "worker");
-      await ctx.reply(
-        `✅ Працівника з ID <code>${newManagerId}</code> успішно <b>додано</b> до бази даних як менеджера.`,
-        {
-          parse_mode: "HTML",
-        },
-      );
-      delete managerState[userId];
-    } catch (error) {
-      console.error("Помилка при додаванні менеджера:", error);
-      await ctx.reply("❌ Помилка при збереженні менеджера в базу даних.");
-      delete managerState[userId];
-    }
-  } else if (currentState.stage === "wait_delete_manager_id") {
-    const managerId = Number(text);
-
-    if (isNaN(managerId) || text.length < 5) {
-      return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
-    } else if (managerId === ctx.from.id) {
-      return ctx.reply("❌ Ви не можете видалити самого себе.");
-    }
-
-    try {
-      const isDeleted = await deleteManager(managerId); // Используем твою функцию удаления
-
-      if (isDeleted) {
+        await setManagerRole(targetManagerId, "worker");
         await ctx.reply(
-          `✅ Працівника з ID <code>${managerId}</code> успішно <b>видалено</b> з бази даних.`,
-          {
-            parse_mode: "HTML",
-          },
+          `✅ Працівника з ID <code>${targetManagerId}</code> успішно <b>додано</b> до бази даних як менеджера.`,
+          { parse_mode: "HTML" },
         );
-      } else {
-        await ctx.reply(
-          `⚠️ Працівника з ID <code>${managerId}</code> не знайдено в базі даних.`,
-          {
-            parse_mode: "HTML",
-          },
-        );
+        delete managerState[userId]; // Чистим стейдж здесь, так как break выйдет за finally
+        break;
       }
 
-      delete managerState[userId];
-    } catch (error) {
-      console.error("Помилка при видаленні менеджера:", error);
-      await ctx.reply(
-        "❌ Сталася помилка при видаленні менеджера з бази даних.",
-      );
-      delete managerState[userId];
+      case "wait_delete_manager_id": {
+        if (isNaN(targetManagerId) || text.length < 5) {
+          return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
+        }
+
+        if (!getManagerRole(targetManagerId)) {
+          return ctx.reply(
+            "❌ Працівника з таким Telegram ID не знайдено. Спробуйте ще раз:",
+          );
+        }
+
+        if (targetManagerId === ctx.from.id) {
+          return ctx.reply(
+            "❌ Ви не можете видалити самого себе. Введіть ID іншого менеджера:",
+          );
+        }
+
+        const isDeleted = await deleteManager(targetManagerId);
+
+        if (isDeleted) {
+          await ctx.reply(
+            `✅ Працівника з ID <code>${targetManagerId}</code> успішно <b>видалено</b> з бази даних.`,
+            { parse_mode: "HTML" },
+          );
+        } else {
+          await ctx.reply(
+            `⚠️ Працівника з ID <code>${targetManagerId}</code> не знайдено в базі даних.`,
+            { parse_mode: "HTML" },
+          );
+        }
+        delete managerState[userId];
+        break;
+      }
+
+      // 3. ЭТАП НАЗВАНИЯ КАРТОЧКИ (Новый стейдж для /newCard)
+      case "wait_title": {
+        const wordsCount = text.split(/\s+/).length;
+
+        if (wordsCount > 3 || !text) {
+          return ctx.reply(
+            "❌ Некоректна назва. Будь ласка, надішліть назву, що містить не більше 3 слів:",
+          );
+        }
+
+        console.log(`Назва карточки получена: ${text}.`);
+
+        managerState[userId] = {
+          stage: "wait_short_description",
+          title: text,
+        };
+
+        await ctx.reply(
+          `✅ Назву карточки "<b>${text}</b>" прийнято.\n\nТепер напишіть коротки опис карточки(бажано не більше 30 символів)`,
+          {
+            parse_mode: "HTML",
+          },
+        );
+        break;
+      }
+
+      case "wait_short_description": {
+        const sentenceLen = text.length;
+
+        if (sentenceLen > 30 || !text) {
+          return ctx.reply(
+            "❌ Некоректна назва. Будь ласка, надішліть назву, що містить не більше 30 символів:",
+          );
+        }
+
+        console.log(`Короткий опис получен: ${text}.`);
+
+        managerState[userId] = {
+          ...currentState,
+          stage: "wait_full_description",
+          shortDescription: text,
+        };
+
+        await ctx.reply(
+          `✅ Короткий опис "<b>${text}</b>" прийнято.\n\nТепер напишіть повний опис карточки`,
+          {
+            parse_mode: "HTML",
+          },
+        );
+        break;
+      }
+
+      case "wait_full_description": {
+        if (!text) {
+          return ctx.reply(
+            "❌ Опис не може бути порожнім. Введіть повний опис:",
+          );
+        }
+
+        const fullDescription = text.trim();
+        console.log(`Повний опис получен: ${fullDescription}.`);
+
+        managerState[userId] = { ...currentState, fullDescription };
+
+        const { title, shortDescription } = currentState;
+
+        const newCardId = addCard(title, shortDescription, fullDescription);
+
+        await ctx.reply(
+          `🎉 <b>Карточку успішно створено!</b>\n\n` +
+            `🆔 <b>ID:</b> <code>${newCardId}</code>\n` +
+            `🏷️ <b>Назва:</b> ${title}\n` +
+            `📝 <b>Короткий опис:</b> ${shortDescription}\n` +
+            `📖 <b>Повний опис:</b> ${fullDescription}`,
+          { parse_mode: "HTML" },
+        );
+        delete managerState[userId];
+        break;
+      }
+
+      default:
+        return next();
     }
-  } else if (currentState.stage === "wait_delete_manager_id") {
-    const managerId = Number(text);
-
-    if (isNaN(managerId) || text.length < 5) {
-      return ctx.reply(
-        "❌ Некоректний Telegram ID. Він має складатися лише з цифр. Спробуйте ще раз або введіть інший:",
-      );
-    } else if (managerId === ctx.from.id) {
-      return ctx.reply(
-        "❌ Ви не можете видалити себе. Спробуйте ще раз або введіть інший:",
-      );
-    }
-
-    try {
-      await deleteManager(managerId);
-
-      await ctx.reply(
-        `✅ Працівника з ID \`${managerId}\` успішно додано до бази даних як менеджера\\.`,
-        {
-          parse_mode: "MarkdownV2",
-        },
-      );
-
-      delete managerState[userId];
-    } catch (error) {
-      console.error("Помилка при додаванні менеджера:", error);
-      await ctx.reply(
-        "❌ Провисла помилка при збереженні менеджера в базу даних.",
-      );
-      delete managerState[userId];
-    }
+  } catch (error) {
+    console.error(`Помилка при обробці стану ${currentState.stage}:`, error);
+    await ctx.reply(
+      "❌ Сталася внутрішня помилка при обробці запиту до бази даних.",
+    );
+    delete managerState[userId]; // В случае ошибки чистим стейдж
   }
 });
 

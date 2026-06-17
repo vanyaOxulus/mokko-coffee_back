@@ -19,7 +19,8 @@ export function setManagerRole(userID, role) {
 }
 
 export function getManagerRole(userID) {
-  return db.prepare("SELECT role FROM managers WHERE userID = ?").get(userID);
+  return db.prepare("SELECT role FROM managers WHERE userID = ?").get(userID)
+    .role;
 }
 export function deleteManager(userID) {
   const stmt = db.prepare("DELETE FROM managers WHERE userID = ?");

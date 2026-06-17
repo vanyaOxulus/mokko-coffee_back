@@ -14,9 +14,9 @@ bot.use(async (ctx, next) => {
 
   console.log(`[Бот] Запрос роли для ID ${userID}:`, managerRow);
 
-  if (managerRow && managerRow.role === "worker") {
+  if (managerRow && managerRow === "worker") {
     ctx.state.role = "worker";
-  } else if (managerRow && managerRow.role === "boss") {
+  } else if (managerRow && managerRow === "boss") {
     ctx.state.role = "boss";
   } else {
     ctx.state.role = "user";

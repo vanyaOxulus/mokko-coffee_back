@@ -1,0 +1,34 @@
+import Database from "better-sqlite3";
+const db = new Database("cards.db");
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    shortDescription TEXT NOT NULL,
+    fullDescription TEXT NOT NULL
+  )
+`,
+).run();
+
+export function addCard(title, shortDescription, fullDescription) {
+  const stmt = db.prepare(
+    "INSERT INTO cards (title, shortDescription, fullDescription) VALUES (?, ?, ?)",
+  );
+  const result = stmt.run(title, shortDescription, fullDescription);
+  return result.lastInsertRowid;
+}
+
+export function getAllCards() {
+  return db.prepare("SELECT * FROM cards").all();
+}
+
+/**
+ * Удалить карточку по её уникальному ID
+ */
+export function deleteCard(cardId) {
+  const stmt = db.prepare("DELETE FROM cards WHERE id = ?");
+  const result = stmt.run(cardId);
+  return result.changes > 0;
+}
