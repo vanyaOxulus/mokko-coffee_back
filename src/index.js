@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { getUserById } from "./db/user_db.js";
+import { getAllCards } from "./db/cards_db.js";
 
 dotenv.config();
 
@@ -55,6 +56,24 @@ app.get("/api/users/:userID", (req, res) => {
 
     res.status(500).json({
       message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/cards", (req, res) => {
+  try {
+    const cards = getAllCards();
+
+    res.json({
+      message: "Cards fetched successfully",
+      cards,
+    });
+  } catch (error) {
+    console.error("Get cards error:", error);
+
+    res.status(500).json({
+      message: "Server error while fetching cards",
       error: error.message,
     });
   }

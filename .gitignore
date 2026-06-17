@@ -37,3 +37,4 @@ coverage/
 # Databases
 users.db
 managers.db
+cards.db

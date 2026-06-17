@@ -11,7 +11,7 @@ import {
   getManagerRole,
   setManagerRole,
 } from "../db/managers_db.js";
-import { addCard } from "../db/cards_db.js";
+import { addCard, deleteCard, getAllCards } from "../db/cards_db.js";
 
 const managerComposer = new Composer();
 const managerState = {};
@@ -55,6 +55,52 @@ async function scanQRCode(imageBuffer) {
     console.error("[QR Помилка всередині scanQRCode]:", error.message);
     return null;
   }
+}
+
+function renderCardPagination(cards, currentIndex) {
+  const card = cards[currentIndex];
+  const total = cards.length;
+
+  const text =
+    `📋 <b>Каталог карток (Видалення) [${currentIndex + 1}/${total}]</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `🆔 <b>ID:</b> <code>${card.id}</code>\n` +
+    `🏷️ <b>Назва:</b> ${card.title}\n` +
+    `📝 <b>Короткий опис:</b> ${card.shortDescription}\n` +
+    `📖 <b>Повний опис:</b> ${card.fullDescription}\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `Оберіть дію:`;
+
+  const navigationRow = [];
+
+  if (currentIndex > 0) {
+    navigationRow.push(
+      Markup.button.callback("⬅️ Назад", `card_page:${currentIndex - 1}`),
+    );
+  } else {
+    navigationRow.push(Markup.button.callback("❌", "card_ignore"));
+  }
+
+  if (currentIndex < total - 1) {
+    navigationRow.push(
+      Markup.button.callback("Вперед ➡️", `card_page:${currentIndex + 1}`),
+    );
+  } else {
+    navigationRow.push(Markup.button.callback("❌", "card_ignore"));
+  }
+
+  const keyboard = Markup.inlineKeyboard([
+    navigationRow,
+    [
+      Markup.button.callback(
+        "🗑️ Видалити цю картку",
+        `card_confirm_del:${card.id}:${currentIndex}`,
+      ),
+    ],
+    [Markup.button.callback("🚩 Закрити меню", "card_close")],
+  ]);
+
+  return { text, keyboard };
 }
 
 managerComposer.on("photo", async (ctx) => {
@@ -180,6 +226,77 @@ managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
   );
 });
 
+managerComposer.action("card_ignore", async (ctx) => await ctx.answerCbQuery());
+
+managerComposer.action("card_close", async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.editMessageText("🚩 Перегляд карток завершено.");
+});
+
+managerComposer.action(/^card_page:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const targetIndex = Number(ctx.match[1]);
+  const cards = getAllCards();
+
+  if (cards.length === 0) {
+    return ctx.editMessageText("📭 Усі картки було видалено.");
+  }
+
+  const { text, keyboard } = renderCardPagination(cards, targetIndex);
+  await ctx.editMessageText(text, { parse_mode: "HTML", ...keyboard });
+});
+
+managerComposer.action(/^card_confirm_del:(\d+):(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const cardId = Number(ctx.match[1]);
+  const currentIndex = Number(ctx.match[2]);
+
+  await ctx.editMessageReplyMarkup(
+    Markup.inlineKeyboard([
+      [
+        Markup.button.callback(
+          "⚠️ ТАК, видалити",
+          `card_execute_del:${cardId}:${currentIndex}`,
+        ),
+        Markup.button.callback("❌ НІ, назад", `card_page:${currentIndex}`),
+      ],
+    ]).reply_markup,
+  );
+});
+
+managerComposer.action(/^card_execute_del:(\d+):(\d+)$/, async (ctx) => {
+  const cardId = Number(ctx.match[1]);
+  const currentIndex = Number(ctx.match[2]);
+
+  try {
+    const isDeleted = deleteCard(cardId);
+
+    if (!isDeleted) {
+      await ctx.answerCbQuery("❌ Картку вже видалено!");
+      return;
+    }
+
+    await ctx.answerCbQuery("✅ Видалено успішно");
+
+    const cards = getAllCards();
+
+    if (cards.length === 0) {
+      return ctx.editMessageText(
+        "📭 Картку видалено. Більше карток у базі немає.",
+      );
+    }
+
+    const nextIndex =
+      currentIndex >= cards.length ? cards.length - 1 : currentIndex;
+
+    const { text, keyboard } = renderCardPagination(cards, nextIndex);
+    await ctx.editMessageText(text, { parse_mode: "HTML", ...keyboard });
+  } catch (error) {
+    console.error("Помилка при видаленні картки:", error);
+    await ctx.reply("❌ Сталася помилка при видаленні картки.");
+  }
+});
+
 // 👑 СЦЕНАРИИ ДЛЯ БОССА (УПРАВЛЕНИЕ ПЕРСОНАЛОМ)
 
 managerComposer.command("newWorker", async (ctx) => {
@@ -195,6 +312,25 @@ managerComposer.command("newWorker", async (ctx) => {
   } else {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
+});
+
+managerComposer.command("deleteCard", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role !== "boss") {
+    return ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+
+  const cards = getAllCards();
+
+  if (cards.length === 0) {
+    return ctx.reply("📭 У базі даних ще немає жодної карточки.");
+  }
+
+  // Рендерим первую карточку (индекс 0)
+  const { text, keyboard } = renderCardPagination(cards, 0);
+  await ctx.reply(text, { parse_mode: "HTML", ...keyboard });
 });
 
 managerComposer.command("deleteWorker", async (ctx) => {

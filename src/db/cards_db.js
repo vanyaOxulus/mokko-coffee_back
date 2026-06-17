@@ -24,9 +24,6 @@ export function getAllCards() {
   return db.prepare("SELECT * FROM cards").all();
 }
 
-/**
- * Удалить карточку по её уникальному ID
- */
 export function deleteCard(cardId) {
   const stmt = db.prepare("DELETE FROM cards WHERE id = ?");
   const result = stmt.run(cardId);
