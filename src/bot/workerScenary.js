@@ -298,6 +298,46 @@ managerComposer.action(/^card_execute_del:(\d+):(\d+)$/, async (ctx) => {
   }
 });
 
+managerComposer.action(/^set_role:(worker|boss)$/, async (ctx) => {
+  const userId = ctx.from.id;
+  const chosenRole = ctx.match[1];
+  const currentState = managerState[userId];
+
+  if (!currentState || currentState.stage !== "wait_manager_role") {
+    await ctx.answerCbQuery("❌ Сесія застаріла.");
+    return ctx.editMessageText(
+      "⏳ Сесія завершилась. Скористайтесь командою /newWorker знову.",
+    );
+  }
+
+  const targetId = currentState.targetManagerId;
+
+  try {
+    await setManagerRole(targetId, chosenRole);
+    await ctx.answerCbQuery("✅ Роль успішно надано");
+
+    const roleBadge =
+      chosenRole === "boss" ? "👑 БОСС (Адмін)" : "☕ Воркер (Бариста)";
+    await ctx.editMessageText(
+      `🎉 <b>Успішно додано!</b>\n\nПрацівника з ID <code>${targetId}</code> успішно додано до бази з роллю: <b>${roleBadge}</b>`,
+      { parse_mode: "HTML" },
+    );
+  } catch (error) {
+    console.error("Помилка при збереженні ролі:", error);
+    await ctx.reply("❌ Не вдалося зберегти дані в базу.");
+  } finally {
+    delete managerState[userId];
+  }
+});
+
+managerComposer.action("cancel_manager_add", async (ctx) => {
+  const userId = ctx.from.id;
+  delete managerState[userId];
+
+  await ctx.answerCbQuery("Скасовано");
+  await ctx.editMessageText("❌ Додавання співробітника скасовано.");
+});
+
 // 👑 СЦЕНАРИИ ДЛЯ БОССА (УПРАВЛЕНИЕ ПЕРСОНАЛОМ)
 
 managerComposer.command("commands", async (ctx) => {
@@ -416,7 +456,7 @@ managerComposer.command("listWorkers", async (ctx) => {
   });
 
   text +=
-    "━━━━━━━━━━━━━━━━━━━━\n💡 <i>Ви можете скопіювати ID для видалення через /removeManager</i>";
+    "━━━━━━━━━━━━━━━━━━━━\n💡 <i>Ви можете скопіювати ID для видалення через /deleteWorker</i>";
 
   await ctx.reply(text, { parse_mode: "HTML" });
 });
@@ -439,12 +479,27 @@ managerComposer.on("text", async (ctx, next) => {
           return ctx.reply("❌ Некоректний Telegram ID. Спробуйте ще раз:");
         }
 
-        await setManagerRole(targetManagerId, "worker");
+        managerState[userId] = {
+          stage: "wait_manager_role",
+          targetManagerId: targetManagerId,
+        };
+
         await ctx.reply(
-          `✅ Працівника з ID <code>${targetManagerId}</code> успішно <b>додано</b> до бази даних як менеджера.`,
-          { parse_mode: "HTML" },
+          `👤 <b>Користувач ID:</b> <code>${targetManagerId}</code>\n\nОберіть роль для цього співробітника:`,
+          {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+              [
+                Markup.button.callback(
+                  "☕ Воркер (Бариста)",
+                  `set_role:worker`,
+                ),
+                Markup.button.callback("👑 Босс (Адмін)", `set_role:boss`),
+              ],
+              [Markup.button.callback("❌ Скасувати", "cancel_manager_add")],
+            ]),
+          },
         );
-        delete managerState[userId]; // Чистим стейдж здесь, так как break выйдет за finally
         break;
       }
 
