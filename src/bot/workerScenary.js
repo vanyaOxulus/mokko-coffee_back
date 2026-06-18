@@ -8,6 +8,7 @@ import {
 } from "../db/user_db.js";
 import {
   deleteManager,
+  getAllManagers,
   getManagerRole,
   setManagerRole,
 } from "../db/managers_db.js";
@@ -299,6 +300,34 @@ managerComposer.action(/^card_execute_del:(\d+):(\d+)$/, async (ctx) => {
 
 // 👑 СЦЕНАРИИ ДЛЯ БОССА (УПРАВЛЕНИЕ ПЕРСОНАЛОМ)
 
+managerComposer.command("commands", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role === "boss") {
+    const bossText =
+      `👑 <b>Панель Керування Кав’ярнею (BOSS)</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `Вітаємо! Вам доступний повний спектр команд для управління контентом та персоналом.\n\n` +
+      `📝 <b>Управління картками:</b>\n` +
+      `• /newCard — Додати нову акційну картку (покроковий режим)\n` +
+      `• /deleteCard — Перегляд та видалення карток (інтерактивна карусель)\n\n` +
+      `👥 <b>Управління персоналом:</b>\n` +
+      `• /newWorker — Призначити нового менеджера або воркера\n` +
+      `• /deleteWorker — Звільнити / видалити доступ у користувача\n` +
+      `• /listWorkers — Список усіх співробітників кав'ярні\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `💡 <i>Для виклику будь-якої команди просто натисніть на неї.</i>`;
+
+    return await ctx.reply(bossText, { parse_mode: "HTML" });
+  }
+
+  await ctx.reply(
+    "❌ <b>Доступ обмежено.</b>\n\nЦей бот призначений виключно для персоналу <b>Mokko Coffee</b>. Якщо ви є співробітником, зверніться до власника для надання доступу.",
+    { parse_mode: "HTML" },
+  );
+});
+
 managerComposer.command("newWorker", async (ctx) => {
   const userId = ctx.from.id;
   const role = getManagerRole(userId);
@@ -312,25 +341,6 @@ managerComposer.command("newWorker", async (ctx) => {
   } else {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
-});
-
-managerComposer.command("deleteCard", async (ctx) => {
-  const userId = ctx.from.id;
-  const role = getManagerRole(userId);
-
-  if (role !== "boss") {
-    return ctx.reply("❌ У вас немає прав для виконання цієї команди.");
-  }
-
-  const cards = getAllCards();
-
-  if (cards.length === 0) {
-    return ctx.reply("📭 У базі даних ще немає жодної карточки.");
-  }
-
-  // Рендерим первую карточку (индекс 0)
-  const { text, keyboard } = renderCardPagination(cards, 0);
-  await ctx.reply(text, { parse_mode: "HTML", ...keyboard });
 });
 
 managerComposer.command("deleteWorker", async (ctx) => {
@@ -361,6 +371,54 @@ managerComposer.command("newCard", async (ctx) => {
   } else {
     await ctx.reply("❌ У вас немає прав для виконання цієї команди.");
   }
+});
+
+managerComposer.command("deleteCard", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role !== "boss") {
+    return ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+
+  const cards = getAllCards();
+
+  if (cards.length === 0) {
+    return ctx.reply("📭 У базі даних ще немає жодної карточки.");
+  }
+
+  // Рендерим первую карточку (индекс 0)
+  const { text, keyboard } = renderCardPagination(cards, 0);
+  await ctx.reply(text, { parse_mode: "HTML", ...keyboard });
+});
+
+managerComposer.command("listWorkers", async (ctx) => {
+  const userId = ctx.from.id;
+  const role = getManagerRole(userId);
+
+  if (role !== "boss") {
+    return ctx.reply("❌ У вас немає прав для виконання цієї команди.");
+  }
+
+  const managers = getAllManagers();
+
+  if (managers.length === 0) {
+    return ctx.reply(
+      "📭 У базі даних немає жодного зареєстрованого співробітника.",
+    );
+  }
+
+  let text = "📋 <b>Список персоналу Mokko Coffee:</b>\n━━━━━━━━━━━━━━━━━━━━\n";
+
+  managers.forEach((manager, index) => {
+    const roleBadge = manager.role === "boss" ? "👑 БОСС" : "☕ Воркер";
+    text += `${index + 1}. ID: <code>${manager.userID}</code> — <b>${roleBadge}</b>\n`;
+  });
+
+  text +=
+    "━━━━━━━━━━━━━━━━━━━━\n💡 <i>Ви можете скопіювати ID для видалення через /removeManager</i>";
+
+  await ctx.reply(text, { parse_mode: "HTML" });
 });
 
 managerComposer.on("text", async (ctx, next) => {
@@ -424,7 +482,6 @@ managerComposer.on("text", async (ctx, next) => {
         break;
       }
 
-      // 3. ЭТАП НАЗВАНИЯ КАРТОЧКИ (Новый стейдж для /newCard)
       case "wait_title": {
         const wordsCount = text.split(/\s+/).length;
 
@@ -451,14 +508,6 @@ managerComposer.on("text", async (ctx, next) => {
       }
 
       case "wait_short_description": {
-        const sentenceLen = text.length;
-
-        if (sentenceLen > 30 || !text) {
-          return ctx.reply(
-            "❌ Некоректна назва. Будь ласка, надішліть назву, що містить не більше 30 символів:",
-          );
-        }
-
         console.log(`Короткий опис получен: ${text}.`);
 
         managerState[userId] = {

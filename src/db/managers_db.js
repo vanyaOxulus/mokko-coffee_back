@@ -28,3 +28,7 @@ export function deleteManager(userID) {
 
   return result.changes > 0;
 }
+
+export function getAllManagers() {
+  return db.prepare("SELECT userID, role FROM managers").all();
+}
