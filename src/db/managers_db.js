@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { deleteUser } from "./user_db.js";
 const db = new Database("managers.db");
 
 db.prepare(
@@ -11,7 +12,8 @@ db.prepare(
 ).run();
 setManagerRole(520249397, "boss");
 
-export function setManagerRole(userID, role) {
+export async function setManagerRole(userID, role) {
+  await deleteUser(userID);
   const stmt = db.prepare(
     "INSERT OR REPLACE INTO managers (userID, role) VALUES (?, ?)",
   );
@@ -20,7 +22,8 @@ export function setManagerRole(userID, role) {
 
 export function getManagerRole(userID) {
   return db.prepare("SELECT role FROM managers WHERE userID = ?").get(userID)
-    .role;
+    ? db.prepare("SELECT role FROM managers WHERE userID = ?").get(userID).role
+    : null;
 }
 export function deleteManager(userID) {
   const stmt = db.prepare("DELETE FROM managers WHERE userID = ?");
