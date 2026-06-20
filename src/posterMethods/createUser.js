@@ -1,11 +1,7 @@
-import dotenv from "dotenv";
-
 const createUser = async (name, phone, telegramId) => {
   try {
     if (!name || !phone) {
-      return res.status(400).json({
-        message: "name and phone are required",
-      });
+      throw new Error("name and phone are required");
     }
 
     const token = encodeURIComponent(process.env.POSTER_TOKEN);
@@ -25,7 +21,6 @@ const createUser = async (name, phone, telegramId) => {
     });
 
     const text = await posterResponse.text();
-    console.log("Poster raw response:", text);
 
     let data;
 
@@ -36,8 +31,11 @@ const createUser = async (name, phone, telegramId) => {
     }
 
     if (!posterResponse.ok || data?.error) {
-      console.log("Poster client create error");
+      console.log("[Poster] Client create request failed");
+      return;
     }
+
+    console.log(`[Poster] Client create request completed for telegram id ${telegramId}`);
   } catch (error) {
     console.error("Poster client create error:", error);
   }
