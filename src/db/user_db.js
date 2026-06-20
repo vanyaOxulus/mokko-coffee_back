@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
+import { getDatabasePath } from "./database_path.js";
 
-const db = new Database("users.db");
+const db = new Database(getDatabasePath("users.db"));
 
 db.prepare(
   `

@@ -1,5 +1,7 @@
 import Database from "better-sqlite3";
-const db = new Database("cards.db");
+import { getDatabasePath } from "./database_path.js";
+
+const db = new Database(getDatabasePath("cards.db"));
 
 db.prepare(
   `

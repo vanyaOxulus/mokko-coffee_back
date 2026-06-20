@@ -1,5 +1,3 @@
-import dotenv from "dotenv";
-
 const getUser = async (telegramId) => {
   try {
     const token = encodeURIComponent(process.env.POSTER_TOKEN);
@@ -13,26 +11,24 @@ const getUser = async (telegramId) => {
     });
 
     const text = await posterResponse.text();
-    console.log("Poster raw response:", text);
 
     let data;
     data = JSON.parse(text).response;
-    console.log("Response data:", data);
-
-    console.log("Ищем ID:", `telegram_id:${telegramId}`);
-    data.forEach((u) => console.log("В базе данных:", u.comment));
+    console.log(
+      `[Poster] Loaded ${Array.isArray(data) ? data.length : 0} clients while checking telegram id ${telegramId}`,
+    );
 
     const user = data.filter((user) =>
-      user.comment.includes(`telegram_id:${telegramId}`),
+      user.comment?.includes(`telegram_id:${telegramId}`),
     );
     if (user && user.length > 0) {
-      console.log("Found user:", user);
+      console.log(`[Poster] Found user for telegram id ${telegramId}`);
       return user;
     }
-    console.log("No user with provided telegram id was found");
+    console.log(`[Poster] No user found for telegram id ${telegramId}`);
     return;
   } catch (error) {
-    console.error("Poster client create error:", error);
+    console.error("Poster client lookup error:", error);
   }
 };
 

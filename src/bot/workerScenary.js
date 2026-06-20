@@ -151,7 +151,7 @@ managerComposer.on("photo", async (ctx) => {
           parse_mode: "HTML",
           ...Markup.inlineKeyboard([
             [
-              user.bonuses < 7
+              user.bonuses < 6
                 ? Markup.button.callback(
                     "➕ Додати бонус",
                     `bonus_add:${user.userID}`,

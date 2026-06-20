@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import { deleteUser } from "./user_db.js";
-const db = new Database("managers.db");
+import { getDatabasePath } from "./database_path.js";
+
+const db = new Database(getDatabasePath("managers.db"));
 
 db.prepare(
   `
