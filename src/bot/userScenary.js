@@ -1,6 +1,6 @@
 import { Composer } from "telegraf";
 import { welcomeMessage, validationSchema } from "./validation.js";
-import { createUser, getUserById } from "../db/user_db.js";
+import { createUser } from "../db/user_db.js";
 import createPosterUser from "../posterMethods/createUser.js";
 import getUser from "../posterMethods/getUser.js";
 
@@ -26,16 +26,11 @@ const formatUkrainianPhone = (rawPhone) => {
 const checkIfUserExists = async (userId) => {
   try {
     const posterUser = await getUser(userId);
-    const dbUser = await getUserById(userId);
-
     const hasPosterUser = posterUser && posterUser.length > 0;
-    const hasDbUser = !!dbUser;
 
-    console.log(
-      `[Check User ${userId}] Poster: ${hasPosterUser}, DB: ${hasDbUser}`,
-    );
+    console.log(`[Check User ${userId}] Poster: ${hasPosterUser}`);
 
-    return hasPosterUser && hasDbUser;
+    return hasPosterUser;
   } catch (error) {
     console.error(`Ошибка при проверке пользователя ${userId}:`, error);
     return false;
@@ -92,8 +87,13 @@ userComposer.on("text", async (ctx) => {
 
         await ctx.reply("Дякую, номер прийнято!");
 
-        await createUser(userId, userData[userId].name, formattedPhone, 0);
         await createPosterUser(userData[userId].name, formattedPhone, userId);
+
+        try {
+          await createUser(userId, userData[userId].name, formattedPhone, 0);
+        } catch (dbError) {
+          console.error("Помилка локального кешування користувача:", dbError);
+        }
 
         await ctx.reply(
           "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",

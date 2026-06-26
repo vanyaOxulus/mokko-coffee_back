@@ -3,8 +3,8 @@ import "./bot/bot.js";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { getUserById } from "./db/user_db.js";
 import { getAllCards } from "./db/cards_db.js";
+import { getPosterClientByTelegramId } from "./posterMethods/getUser.js";
 
 dotenv.config();
 
@@ -35,11 +35,11 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/users/:userID", (req, res) => {
+app.get("/api/users/:userID", async (req, res) => {
   try {
     const { userID } = req.params;
 
-    const user = getUserById(Number(userID));
+    const user = await getPosterClientByTelegramId(userID);
 
     if (!user) {
       return res.status(404).json({

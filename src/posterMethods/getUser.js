@@ -1,3 +1,77 @@
+const toNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const firstDefined = (source, keys) => {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
+};
+
+export const normalizePosterClient = (client) => {
+  if (!client) {
+    return null;
+  }
+
+  const firstName = firstDefined(client, ["firstname", "first_name"]);
+  const lastName = firstDefined(client, ["lastname", "last_name"]);
+  const composedName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+  return {
+    posterId: firstDefined(client, ["client_id", "id"]),
+    userID: firstDefined(client, ["telegram_id", "telegramId"]),
+    name:
+      firstDefined(client, ["client_name", "name", "fullname", "full_name"]) ||
+      composedName,
+    phone: firstDefined(client, ["phone", "phone_number", "mobile"]),
+    bonuses: toNumber(
+      firstDefined(client, [
+        "bonus",
+        "bonuses",
+        "points",
+        "loyalty_bonus",
+        "client_bonus",
+        "account_balance",
+      ]),
+    ),
+    totalSpent: toNumber(
+      firstDefined(client, [
+        "total_payed",
+        "total_payed_sum",
+        "total_paid",
+        "totalPayed",
+        "totalPaid",
+        "payed_sum",
+        "paid_sum",
+        "total_sum",
+        "total_amount",
+        "turnover",
+        "purchases_sum",
+      ]),
+    ),
+  };
+};
+
+export const getPosterClientByTelegramId = async (telegramId) => {
+  const users = await getUser(telegramId);
+  const client = normalizePosterClient(users?.[0]);
+
+  if (client) {
+    client.userID = telegramId;
+  }
+
+  return client;
+};
+
 const getUser = async (telegramId) => {
   try {
     const token = encodeURIComponent(process.env.POSTER_TOKEN);
@@ -14,8 +88,14 @@ const getUser = async (telegramId) => {
 
     let data;
     data = JSON.parse(text).response;
+
+    if (!Array.isArray(data)) {
+      console.log("[Poster] Unexpected clients response shape");
+      return;
+    }
+
     console.log(
-      `[Poster] Loaded ${Array.isArray(data) ? data.length : 0} clients while checking telegram id ${telegramId}`,
+      `[Poster] Loaded ${data.length} clients while checking telegram id ${telegramId}`,
     );
 
     const user = data.filter((user) =>

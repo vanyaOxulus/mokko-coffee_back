@@ -2,20 +2,28 @@ import { Composer, Markup } from "telegraf";
 import * as JimpPkg from "jimp";
 import jsQR from "jsqr";
 import {
-  getUserById,
-  incrementUserBonuses,
-  resetUserBonuses,
-} from "../db/user_db.js";
-import {
   deleteManager,
   getAllManagers,
   getManagerRole,
   setManagerRole,
 } from "../db/managers_db.js";
 import { addCard, deleteCard, getAllCards } from "../db/cards_db.js";
+import { getPosterClientByTelegramId } from "../posterMethods/getUser.js";
 
 const managerComposer = new Composer();
 const managerState = {};
+
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const formatMoney = (amount) =>
+  new Intl.NumberFormat("uk-UA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0);
 
 async function readImageWithJimp(buffer) {
   if (JimpPkg.Jimp && typeof JimpPkg.Jimp.read === "function") {
@@ -134,34 +142,27 @@ managerComposer.on("photo", async (ctx) => {
     const clientId = qrContent.split(":")[1];
     console.log(`[Бот] Результат сканування clientId: ${clientId}`);
 
-    const user = getUserById(clientId);
-    console.log("User в БД:", user);
+    const user = await getPosterClientByTelegramId(clientId);
+    console.log("User в Poster:", user);
 
     if (user) {
       await ctx.reply(
         `👤 <b>Клієнта знайдено!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `🏷️ <b>Ім'я:</b> ${user.name}\n` +
-          `📞 <b>Телефон:</b> <code>${user.phone}</code>\n` +
-          `🪙 <b>Бонуси:</b> ${user.bonuses}/7\n` +
-          `🆔 <b>Telegram ID:</b> <code>${user.userID}</code>\n` +
+          `🏷️ <b>Ім'я:</b> ${escapeHtml(user.name || "Не вказано")}\n` +
+          `📞 <b>Телефон:</b> <code>${escapeHtml(user.phone || "Не вказано")}</code>\n` +
+          `🪙 <b>Бонуси:</b> ${formatMoney(user.bonuses)}\n` +
+          `💳 <b>Витрачено за весь час:</b> ${formatMoney(user.totalSpent)} грн\n` +
+          `🆔 <b>Telegram ID:</b> <code>${escapeHtml(clientId)}</code>\n` +
+          `🧾 <b>Poster ID:</b> <code>${escapeHtml(user.posterId || "Не вказано")}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `Оберіть дію для цього профілю:`,
+          `Дані програми лояльності отримано з Poster.`,
         {
           parse_mode: "HTML",
           ...Markup.inlineKeyboard([
             [
-              user.bonuses < 6
-                ? Markup.button.callback(
-                    "➕ Додати бонус",
-                    `bonus_add:${user.userID}`,
-                  )
-                : Markup.button.callback(
-                    "🪙 Списати бонуси",
-                    `bonus_reset:${user.userID}`,
-                  ),
               Markup.button.callback(
-                "❌ Скасувати",
+                "✅ Закрити",
                 `bonus_cancel:${user.userID}`,
               ),
             ],
@@ -183,7 +184,7 @@ managerComposer.on("photo", async (ctx) => {
           `Не вдалося надіслати повідомлення незареєстрованому юзеру: ${tgErr.message}`,
         );
       }
-      await ctx.reply("❌ QR-код зчитаний, але клієнта немає в базі даних.");
+      await ctx.reply("❌ QR-код зчитаний, але клієнта не знайдено в Poster.");
     }
   } catch (error) {
     console.error("[Критична помилка в хендлері фото]:", error);
@@ -195,9 +196,8 @@ managerComposer.action(/^bonus_add:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
   const clientId = ctx.match[1];
   try {
-    await incrementUserBonuses(clientId);
     await ctx.editMessageText(
-      `✅ Бонус успішно додано для клієнта (ID: ${clientId})!`,
+      `ℹ️ Бонуси клієнта (ID: ${clientId}) тепер беруться з Poster. Нарахування в локальній базі вимкнено.`,
     );
   } catch (error) {
     console.error("Помилка нарахування бонусу:", error);
@@ -209,9 +209,8 @@ managerComposer.action(/^bonus_reset:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery("Обробка...");
   const clientId = ctx.match[1];
   try {
-    await resetUserBonuses(clientId);
     await ctx.editMessageText(
-      `✅ Бонуси успішно списано для клієнта (ID: ${clientId})!`,
+      `ℹ️ Бонуси клієнта (ID: ${clientId}) тепер беруться з Poster. Списання в локальній базі вимкнено.`,
     );
   } catch (error) {
     console.error("Помилка списання бонусу:", error);
@@ -223,7 +222,7 @@ managerComposer.action(/^bonus_cancel:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery();
   const clientId = ctx.match[1];
   await ctx.editMessageText(
-    `🚫 Операцію для клієнта (ID: ${clientId}) скасовано менеджером.`,
+    `✅ Картку клієнта (ID: ${clientId}) закрито.`,
   );
 });
 

@@ -16,6 +16,7 @@ const createUser = async (name, phone, telegramId) => {
         client_name: name,
         client_groups_id_client: "3",
         phone: phone,
+        cardNumber: telegramId,
         comment: telegramId ? `telegram_id:${telegramId}` : "",
       }),
     });
@@ -35,7 +36,9 @@ const createUser = async (name, phone, telegramId) => {
       return;
     }
 
-    console.log(`[Poster] Client create request completed for telegram id ${telegramId}`);
+    console.log(
+      `[Poster] Client create request completed for telegram id ${telegramId}`,
+    );
   } catch (error) {
     console.error("Poster client create error:", error);
   }
