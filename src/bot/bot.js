@@ -1,26 +1,19 @@
 import "dotenv/config";
 import { Telegraf, Composer } from "telegraf";
-import * as Yup from "yup";
-import { setManagerRole, getManagerRole } from "../db/managers_db.js";
+import { getAdminRole } from "../db/admins_db.js";
 import { userScenary } from "./userScenary.js";
-import { workerScenary } from "./workerScenary.js";
+import { adminScenary } from "./adminScenary.js";
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 bot.use(async (ctx, next) => {
   const userID = ctx.from?.id;
   if (!userID) return;
 
-  const managerRow = getManagerRole(userID);
+  const role = getAdminRole(userID);
 
-  console.log(`[Бот] Запрос роли для ID ${userID}:`, managerRow);
+  console.log(`[Бот] Запрос роли для ID ${userID}:`, role);
 
-  if (managerRow && managerRow === "worker") {
-    ctx.state.role = "worker";
-  } else if (managerRow && managerRow === "boss") {
-    ctx.state.role = "boss";
-  } else {
-    ctx.state.role = "user";
-  }
+  ctx.state.role = role === "admin" ? "admin" : "user";
 
   console.log(`[Бот] Установлена роль: ${ctx.state.role}`);
 
@@ -29,12 +22,7 @@ bot.use(async (ctx, next) => {
 
 bot.use(Composer.optional((ctx) => ctx.state.role === "user", userScenary));
 
-bot.use(
-  Composer.optional(
-    (ctx) => ctx.state.role === "worker" || ctx.state.role === "boss",
-    workerScenary,
-  ),
-);
+bot.use(Composer.optional((ctx) => ctx.state.role === "admin", adminScenary));
 
 bot.launch();
 

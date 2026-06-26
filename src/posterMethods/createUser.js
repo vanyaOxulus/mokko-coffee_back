@@ -16,8 +16,7 @@ const createUser = async (name, phone, telegramId) => {
         client_name: name,
         client_groups_id_client: "3",
         phone: phone,
-        cardNumber: telegramId,
-        comment: telegramId ? `telegram_id:${telegramId}` : "",
+        card_number: telegramId,
       }),
     });
 

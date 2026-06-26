@@ -1,4 +1,3 @@
-import "./db/user_db.js";
 import "./bot/bot.js";
 import express from "express";
 import cors from "cors";
@@ -38,6 +37,7 @@ app.get("/api/health", (req, res) => {
 app.get("/api/users/:userID", async (req, res) => {
   try {
     const { userID } = req.params;
+    console.log(`[API] Get user request for Telegram ID: ${userID}`);
 
     const user = await getPosterClientByTelegramId(userID);
 

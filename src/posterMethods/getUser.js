@@ -7,6 +7,8 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const toPosterMoney = (value) => toNumber(value) / 100;
+
 const firstDefined = (source, keys) => {
   for (const key of keys) {
     if (source?.[key] !== undefined && source?.[key] !== null) {
@@ -16,6 +18,8 @@ const firstDefined = (source, keys) => {
 
   return undefined;
 };
+
+const normalizeId = (value) => String(value ?? "").trim();
 
 export const normalizePosterClient = (client) => {
   if (!client) {
@@ -28,12 +32,12 @@ export const normalizePosterClient = (client) => {
 
   return {
     posterId: firstDefined(client, ["client_id", "id"]),
-    userID: firstDefined(client, ["telegram_id", "telegramId"]),
+    userID: normalizeId(client.card_number),
     name:
       firstDefined(client, ["client_name", "name", "fullname", "full_name"]) ||
       composedName,
     phone: firstDefined(client, ["phone", "phone_number", "mobile"]),
-    bonuses: toNumber(
+    bonuses: toPosterMoney(
       firstDefined(client, [
         "bonus",
         "bonuses",
@@ -43,7 +47,7 @@ export const normalizePosterClient = (client) => {
         "account_balance",
       ]),
     ),
-    totalSpent: toNumber(
+    totalSpent: toPosterMoney(
       firstDefined(client, [
         "total_payed",
         "total_payed_sum",
@@ -62,11 +66,12 @@ export const normalizePosterClient = (client) => {
 };
 
 export const getPosterClientByTelegramId = async (telegramId) => {
-  const users = await getUser(telegramId);
+  const normalizedTelegramId = normalizeId(telegramId);
+  const users = await getUser(normalizedTelegramId);
   const client = normalizePosterClient(users?.[0]);
 
   if (client) {
-    client.userID = telegramId;
+    client.userID = normalizedTelegramId;
   }
 
   return client;
@@ -86,8 +91,22 @@ const getUser = async (telegramId) => {
 
     const text = await posterResponse.text();
 
+    if (!posterResponse.ok) {
+      console.log(
+        `[Poster] Client lookup failed with status ${posterResponse.status}: ${text}`,
+      );
+      return;
+    }
+
     let data;
-    data = JSON.parse(text).response;
+    const parsedResponse = JSON.parse(text);
+
+    if (parsedResponse?.error) {
+      console.log("[Poster] Client lookup returned error:", parsedResponse);
+      return;
+    }
+
+    data = parsedResponse.response;
 
     if (!Array.isArray(data)) {
       console.log("[Poster] Unexpected clients response shape");
@@ -98,14 +117,28 @@ const getUser = async (telegramId) => {
       `[Poster] Loaded ${data.length} clients while checking telegram id ${telegramId}`,
     );
 
-    const user = data.filter((user) =>
-      user.comment?.includes(`telegram_id:${telegramId}`),
-    );
+    const normalizedTelegramId = normalizeId(telegramId);
+    const user = data.filter((user) => {
+      const cardNumber = normalizeId(user.card_number);
+      const legacyComment = normalizeId(user.comment);
+
+      return (
+        cardNumber === normalizedTelegramId ||
+        legacyComment.includes(`telegram_id:${normalizedTelegramId}`)
+      );
+    });
     if (user && user.length > 0) {
       console.log(`[Poster] Found user for telegram id ${telegramId}`);
       return user;
     }
-    console.log(`[Poster] No user found for telegram id ${telegramId}`);
+    console.log(
+      `[Poster] No user found for telegram id ${telegramId}. Sample card numbers:`,
+      data.slice(0, 5).map((client) => ({
+        client_id: client.client_id,
+        card_number: client.card_number,
+        phone: client.phone,
+      })),
+    );
     return;
   } catch (error) {
     console.error("Poster client lookup error:", error);
