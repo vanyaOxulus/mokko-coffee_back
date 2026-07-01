@@ -14,7 +14,7 @@ const createUser = async (name, phone, telegramId) => {
       },
       body: new URLSearchParams({
         client_name: name,
-        client_groups_id_client: "3",
+        client_groups_name: "Telegram Mini App 1%",
         phone: phone,
         card_number: telegramId,
       }),

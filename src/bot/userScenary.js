@@ -6,6 +6,23 @@ import getUser from "../posterMethods/getUser.js";
 const userData = {};
 const userComposer = new Composer();
 
+const phoneKeyboard = {
+  reply_markup: {
+    keyboard: [
+      [{ text: "📱 Поділитись номером", request_contact: true }],
+      [{ text: "Ввести номер вручну" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  },
+};
+
+const removeKeyboard = {
+  reply_markup: {
+    remove_keyboard: true,
+  },
+};
+
 const formatUkrainianPhone = (rawPhone) => {
   let cleaned = rawPhone.replace(/[\s\-\(\)\+]/g, "");
 
@@ -33,6 +50,25 @@ const checkIfUserExists = async (userId) => {
   } catch (error) {
     console.error(`Ошибка при проверке пользователя ${userId}:`, error);
     return false;
+  }
+};
+
+const handlePhone = async (ctx, userId, phone) => {
+  try {
+    const formattedPhone = formatUkrainianPhone(phone);
+    await validationSchema.validateAt("phone", { phone: formattedPhone });
+
+    await ctx.reply("Дякую, номер прийнято!", removeKeyboard);
+
+    await createPosterUser(userData[userId].name, formattedPhone, userId);
+
+    await ctx.reply(
+      "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
+    );
+
+    delete userData[userId];
+  } catch (err) {
+    await ctx.reply(err.message);
   }
 };
 
@@ -73,29 +109,22 @@ userComposer.on("text", async (ctx) => {
         await validationSchema.validateAt("fullName", { fullName: text });
         userData[userId].name = text;
         userData[userId].stage = "phone";
-        await ctx.reply("Дякую, прийнято!\nТепер напишіть ваш номер телефону");
+        await ctx.reply(
+          "Дякую, прийнято!\nТепер поділіться номером телефону або введіть його вручну.",
+          phoneKeyboard,
+        );
       } catch (err) {
         await ctx.reply(err.message);
       }
       break;
 
     case "phone":
-      try {
-        const formattedPhone = formatUkrainianPhone(text);
-        await validationSchema.validateAt("phone", { phone: formattedPhone });
-
-        await ctx.reply("Дякую, номер прийнято!");
-
-        await createPosterUser(userData[userId].name, formattedPhone, userId);
-
-        await ctx.reply(
-          "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
-        );
-
-        delete userData[userId];
-      } catch (err) {
-        await ctx.reply(err.message);
+      if (text === "Ввести номер вручну") {
+        await ctx.reply("Напишіть ваш номер телефону повідомленням.");
+        break;
       }
+
+      await handlePhone(ctx, userId, text);
       break;
 
     default:
@@ -104,6 +133,30 @@ userComposer.on("text", async (ctx) => {
       );
       break;
   }
+});
+
+userComposer.on("contact", async (ctx) => {
+  const userId = ctx.chat.id;
+
+  if (!userData[userId]) {
+    const isRegistered = await checkIfUserExists(userId);
+    if (isRegistered) {
+      return ctx.reply(
+        "Ви вже зареєстровані.\n\nВідкрийте застосунок та почніть користуватись знижками.",
+      );
+    }
+    return ctx.reply("Будь ласка, натисніть /start для реєстрації.");
+  }
+
+  const userState = userData[userId];
+
+  if (userState.stage !== "phone") {
+    return ctx.reply(
+      "Вибачте, я вас не розумію. Напишіть /start для початку реєстрації.",
+    );
+  }
+
+  await handlePhone(ctx, userId, ctx.message.contact.phone_number);
 });
 
 export { userComposer as userScenary };
