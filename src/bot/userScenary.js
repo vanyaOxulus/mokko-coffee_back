@@ -58,9 +58,9 @@ const handlePhone = async (ctx, userId, phone) => {
     const formattedPhone = formatUkrainianPhone(phone);
     await validationSchema.validateAt("phone", { phone: formattedPhone });
 
-    await ctx.reply("Дякую, номер прийнято!", removeKeyboard);
-
     await createPosterUser(userData[userId].name, formattedPhone, userId);
+
+    await ctx.reply("Дякую, номер прийнято!", removeKeyboard);
 
     await ctx.reply(
       "Ваша заявка на створення профілю прийнята.\nТепер ви можете користуватись застосунком. Натисніть кнопку нижче, щоб відкрити додаток та зануритися в атмосферу Mokko!",
